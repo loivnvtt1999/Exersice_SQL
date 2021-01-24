@@ -1,0 +1,131 @@
+select [CustomerID],[CompanyName],[Address],[City],[Phone],[Fax]
+ into KhachHang
+ from Northwind.[dbo].[Customers]
+select [EmployeeID],[LastName],[FirstName],[BirthDate],[Address],[City] into Nhanvien
+	from Northwind.dbo.Employees
+select [SupplierID],[CompanyName],[Address],[City],[Phone],[Fax] into Nhacungcap
+	from Northwind.dbo.Suppliers
+select [CategoryID],[CategoryName],[Description]   into NhomSP
+	from Northwind.dbo.Categories
+select [ProductID], [ProductName], [SupplierID], [CategoryID],[QuantityPerUnit], [UnitPrice]
+   into Sanpham 
+   from Northwind.dbo.Products
+select [OrderID],[CustomerID],[EmployeeID],[OrderDate] 
+into Hoadon 
+from Northwind.dbo.Orders
+ select [OrderID],[ProductID],[UnitPrice],[Quantity] 
+ into Chitiethoadon
+from  Northwind.dbo.[Order Details]
+alter table Chitiethoadon
+add constraint PK_Chitiethoadon primary key([OrderID],[ProductID])
+alter table [dbo].[Hoadon]
+add constraint PK_HoaDon primary key([OrderID])
+alter table [dbo].[KhachHang]
+add constraint PK_KhachHang primary key([CustomerID])
+alter table Nhanvien
+add constraint PK_Nhanvien primary key ([EmployeeID])
+alter table NhomSP
+add constraint PK_NhomSP primary key([CategoryID])
+alter table Sanpham
+add constraint PK_Sanpham primary key([ProductID])
+alter table Nhacungcap
+add constraint PK_Nhacungcap primary key([SupplierID])
+ALTER TABLE [dbo].[Hoadon]
+	add constraint HD_FK1 foreign key ([EmployeeID]) references  Nhanvien([EmployeeID]) 
+ALTER TABLE [dbo].[Hoadon]
+	add constraint HD_FK2 foreign key ([CustomerID]) references  Khachhang([CustomerID]) 
+ALTER TABLE [dbo].[Chitiethoadon]
+	add constraint Cthd_FK1 foreign key ([ProductID]) references  [dbo].[Sanpham]([ProductID]) 
+ALTER TABLE [dbo].[Chitiethoadon]
+	add constraint Cthd_FK2 foreign key ([OrderID]) references  [dbo].[Hoadon]([OrderID]) 
+ALTER TABLE [dbo].[Sanpham]
+	add constraint Sp_FK1 foreign key ([CategoryID]) references  [dbo].[NhomSP]([CategoryID]) 
+ALTER TABLE [dbo].[Sanpham]
+	add constraint Sp_FK2 foreign key ([SupplierID]) references  [dbo].[Nhacungcap]([SupplierID])
+--liet ke nhan vien co tuoi lon nhat
+select top (1) [EmployeeID], DATEDIFF(YEAR,[BirthDate],GETDATE()) as age
+from Nhanvien
+order by Age Desc
+--cach 2
+select [EmployeeID], DATEDIFF(YEAR,[BirthDate],GETDATE()) as age
+from Nhanvien
+where DATEDIFF(YEAR,[BirthDate],GETDATE()) >= all (select DATEDIFF(YEAR,[BirthDate],GETDATE()) as age
+from Nhanvien)
+--1. Li?t kê các s?n ph?m chua bán
+select *
+from Sanpham s left join Chitiethoadon ct on ct.ProductID= s.ProductID
+where ct.OrderID is null
+
+--2. Li?t kê các khách hàng không có hóa don nào
+select kh.CustomerID, kh.CompanyName
+from Hoadon hd right join KhachHang kh on kh.CustomerID= hd.CustomerID
+where hd.CustomerID is null
+--3. Li?t kê các nhân viên không l?p hóa don nào
+select nv.EmployeeID, nv.FirstName, nv.LastName
+from Hoadon hd right join Nhanvien nv on nv.EmployeeID= hd.EmployeeID
+where hd.EmployeeID is null
+--4. Li?t kê các nhóm s?n ph?m (Categories) có trên 10 s?n ph?m, thông tin g?m
+--[CategoryID], [CategoryName],
+select nsp.CategoryID, nsp.CategoryName, count(sp.ProductID) as countProduct
+from NhomSP nsp join Sanpham sp on nsp.CategoryID= sp.CategoryID
+group by nsp.CategoryID, nsp.CategoryName
+having count(sp.ProductID) in (select count(sp.ProductID) as countProduct
+from NhomSP nsp join Sanpham sp on nsp.CategoryID= sp.CategoryID
+group by nsp.CategoryID
+having count(sp.ProductID)=10)
+select *from NhomSP nsp join Sanpham sp on nsp.CategoryID= sp.CategoryID
+--5. Li?t kê các s?n ph?m có trên 20 don hàng trong nam 1998, thông tin g?m [ProductID],
+--[ProductName]
+select s.ProductID, s.ProductName, count(ct.OrderID)
+from Chitiethoadon ct join Hoadon hd on ct.OrderID= hd.OrderID join Sanpham s on ct.ProductID=s.ProductID
+where year(hd.OrderDate)=1998
+group by s.ProductID, s.ProductName
+having count(ct.OrderID) in(select count(ct.OrderID)from Chitiethoadon ct join Hoadon hd on ct.OrderID= hd.OrderID join Sanpham s on ct.ProductID=s.ProductID
+where year(hd.OrderDate)=1998
+group by s.ProductID, s.ProductName having COUNT(ct.OrderID)>20)
+--6. Li?t kê các khách hàng có các hóa don v?i tr? giá >20000 trong nam 1998, thông tin
+--g?m [CustomerID], [CompanyName]
+select kh.CustomerID,kh.CompanyName,sum(ct.Quantity*ct.UnitPrice)
+from Chitiethoadon ct join Hoadon hd on ct.OrderID= hd.OrderID join KhachHang kh on hd.CustomerID= kh.CustomerID
+where year(hd.OrderDate)=1998
+group by kh.CustomerID,kh.CompanyName
+having sum(ct.Quantity*ct.UnitPrice) in (select sum(ct.Quantity*ct.UnitPrice)
+										from Chitiethoadon ct join Hoadon hd on ct.OrderID= hd.OrderID join KhachHang kh on hd.CustomerID= kh.CustomerID
+										where year(hd.OrderDate)=1998
+										group by kh.CustomerID
+										having sum(ct.Quantity*ct.UnitPrice)>20000)
+--7. Li?t kê các nhà cung c?p cung c?p cung c?p các s?n ph?m có trên 30 don hàng trong
+--nam 1997, thông tin g?m [SupplierID], [CompanyName], [City]
+select ncc.SupplierID,ncc.CompanyName,ncc.City, COUNT(hd.OrderID) as countOrder
+from Chitiethoadon ct join Sanpham sp on ct.ProductID=sp.ProductID join Nhacungcap ncc on ncc.SupplierID=sp.SupplierID join Hoadon hd on ct.OrderID=hd.OrderID
+where year(hd.OrderDate)=1997
+group by ncc.SupplierID,ncc.CompanyName,ncc.City
+having count(hd.OrderID) in (select  COUNT(hd.OrderID) as countOrder
+							from Chitiethoadon ct join Sanpham sp on ct.ProductID=sp.ProductID join Nhacungcap ncc on ncc.SupplierID=sp.SupplierID join Hoadon hd on ct.OrderID=hd.OrderID
+							where year(hd.OrderDate)=1997
+							group by ncc.SupplierID,ncc.CompanyName,ncc.City
+							having count(hd.OrderID)>30)
+--8. Xem thông tin c?a nhân viên l?p nhi?u hóa don nh?t trong nam 1998
+select nv.EmployeeID,nv.FirstName, nv.LastName,count(hd.OrderID)
+from Nhanvien nv join Hoadon hd on nv.EmployeeID=hd.EmployeeID
+where year(hd.OrderDate)=1998
+group by nv.EmployeeID,nv.FirstName, nv.LastName
+having count(hd.OrderID)>= all(select count(hd.OrderID)
+								from Nhanvien nv join Hoadon hd on nv.EmployeeID=hd.EmployeeID
+								where year(hd.OrderDate)=1998
+								group by nv.EmployeeID)
+--9. Xem thông tin c?a nhóm s?n ph?m có s? s?n ph?m nhi?u nh?t
+select nsp.CategoryID, nsp.CategoryName, count(sp.ProductID) as countProduct
+from NhomSP nsp join Sanpham sp on nsp.CategoryID= sp.CategoryID
+group by nsp.CategoryID, nsp.CategoryName
+having count(sp.ProductID) >= all(select  count(sp.ProductID) as countProduct
+								from NhomSP nsp join Sanpham sp on nsp.CategoryID= sp.CategoryID
+								group by nsp.CategoryID, nsp.CategoryName
+								)
+--10.Xem thông tin c?a khách hàng có nhi?u hóa don nh?t trong quý 1 nam 1998
+select kh.CustomerID, kh.CompanyName, count(hd.OrderID)
+from KhachHang kh join Hoadon hd on kh.CustomerID=hd.CustomerID
+where DATEPART(qq,orderdate)=1 and year(hd.OrderDate)=1998
+having count(hd.OrderID) >=all(select count(hd.OrderID)
+								from KhachHang kh join Hoadon hd on kh.CustomerID=hd.CustomerID
+								where DATEPART(qq,orderdate)=1 and year(hd.OrderDate)=1998)
